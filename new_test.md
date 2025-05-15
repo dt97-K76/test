@@ -175,3 +175,16 @@ int wmain() {
 
 
 ```
+
+
+Mục đích	API tiêu biểu	Ghi chú
+Tên máy, OS version	GetComputerNameEx, RtlGetVersion	
+Phần cứng	GetSystemInfo, SetupDi*	
+Mạng	GetAdaptersAddresses, GetExtendedTcpTable	
+Firewall	INetFwMgr COM, WFP API	
+Tiến trình, dịch vụ	EnumProcesses, EnumServicesStatusEx	
+Registry	RegOpenKeyEx, RegQueryValueEx	
+Người dùng	GetUserName, NetUserGetInfo	
+Thời gian hệ thống	GetSystemTime, GetTickCount64	
+Ổ đĩa	GetLogicalDrives, GetDiskFreeSpaceEx	
+WMI	COM/WMI queries	Rất mạnh, rất chi tiết
