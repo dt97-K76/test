@@ -188,3 +188,10 @@ Người dùng	GetUserName, NetUserGetInfo
 Thời gian hệ thống	GetSystemTime, GetTickCount64	
 Ổ đĩa	GetLogicalDrives, GetDiskFreeSpaceEx	
 WMI	COM/WMI queries	Rất mạnh, rất chi tiết
+
+
+
+
+
+
+powershell -Command "Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\* | Where-Object { $_.DisplayName -and $_.DisplayVersion } | ForEach-Object { \"$($_.DisplayName) - $($_.DisplayVersion)\" }"
