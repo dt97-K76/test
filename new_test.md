@@ -12,5 +12,11 @@ Install-WindowsFeature NET-Framework-45-Features, RPC-over-HTTP-proxy, RSAT-Clus
 
  https://www.iis.net/downloads/microsoft/url-rewrite
 
+ 	Schema Admins
+
+  	Enterprise Admins
+
+   Domain Admins
+
 
  
