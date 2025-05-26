@@ -152,5 +152,195 @@ Get-WmiObject -Class Win32_Process -List | select -ExpandProperty Methods
 Windows Registry
 WMI provides a class called StdRegProv for interacting with the Windows Registry.
 
+![image](https://github.com/user-attachments/assets/62982a74-fc52-4925-b4e1-092bbe3ad7d4)
+
+https://0xinfection.github.io/posts/page/2/
+
+
+```
+#include <windows.h>
+#include <netfw.h>
+#include <comdef.h>
+#include <iostream>
+#include <string>
+#include <locale>
+#include <fcntl.h>
+#include <io.h>
+#include <iomanip>  // để setw, left, right
+
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "oleaut32.lib")
+
+std::wstring BstrToWstring(BSTR bstr) {
+    return bstr ? std::wstring(bstr) : L"";
+}
+
+std::wstring ProtocolToString(LONG protocol) {
+    switch (protocol) {
+    case NET_FW_IP_PROTOCOL_TCP: return L"TCP";
+    case NET_FW_IP_PROTOCOL_UDP: return L"UDP";
+    case NET_FW_IP_PROTOCOL_ANY: return L"Any";
+    default:
+        return std::to_wstring(protocol);
+    }
+}
+
+int main() {
+    std::locale::global(std::locale(""));
+    _setmode(_fileno(stdout), _O_U16TEXT);
+
+    HRESULT hr = CoInitialize(NULL);
+    if (FAILED(hr)) {
+        std::wcerr << L"Không thể khởi tạo COM: " << hr << std::endl;
+        return 1;
+    }
+
+    INetFwPolicy2* pNetFwPolicy2 = nullptr;
+    hr = CoCreateInstance(
+        __uuidof(NetFwPolicy2),
+        nullptr,
+        CLSCTX_INPROC_SERVER,
+        __uuidof(INetFwPolicy2),
+        (void**)&pNetFwPolicy2
+    );
+
+    if (FAILED(hr)) {
+        std::wcerr << L"Không thể tạo instance INetFwPolicy2: " << hr << std::endl;
+        CoUninitialize();
+        return 1;
+    }
+
+    INetFwRules* pFwRules = nullptr;
+    hr = pNetFwPolicy2->get_Rules(&pFwRules);
+    if (FAILED(hr)) {
+        std::wcerr << L"Không thể lấy danh sách quy tắc tường lửa: " << hr << std::endl;
+        pNetFwPolicy2->Release();
+        CoUninitialize();
+        return 1;
+    }
+
+    long ruleCount = 0;
+    hr = pFwRules->get_Count(&ruleCount);
+    if (FAILED(hr)) {
+        std::wcerr << L"Không thể lấy số lượng quy tắc: " << hr << std::endl;
+        pFwRules->Release();
+        pNetFwPolicy2->Release();
+        CoUninitialize();
+        return 1;
+    }
+
+    std::wcout << L"Tổng số quy tắc tường lửa: " << ruleCount << std::endl << std::endl;
+
+    // In header bảng
+    const int wRuleName = 25;
+    const int wDescription = 30;
+    const int wEnabled = 8;
+    const int wDirection = 8;
+    const int wApp = 30;
+    const int wLocalPort = 12;
+    const int wRemotePort = 12;
+    const int wProtocol = 8;
+
+    std::wcout << std::left
+        << std::setw(wRuleName) << L"Rule Name"
+        << std::setw(wDescription) << L"Description"
+        << std::setw(wEnabled) << L"Enabled"
+        << std::setw(wDirection) << L"Direction"
+        << std::setw(wApp) << L"Application"
+        << std::setw(wLocalPort) << L"Local Port"
+        << std::setw(wRemotePort) << L"Remote Port"
+        << std::setw(wProtocol) << L"Protocol"
+        << std::endl;
+
+    std::wcout << std::wstring(wRuleName + wDescription + wEnabled + wDirection + wApp + wLocalPort + wRemotePort + wProtocol, L'-') << std::endl;
+
+    IUnknown* pEnumerator = nullptr;
+    hr = pFwRules->get__NewEnum(&pEnumerator);
+    if (FAILED(hr)) {
+        std::wcerr << L"Không thể lấy bộ đếm enumerator: " << hr << std::endl;
+        pFwRules->Release();
+        pNetFwPolicy2->Release();
+        CoUninitialize();
+        return 1;
+    }
+
+    IEnumVARIANT* pEnumVariant = nullptr;
+    hr = pEnumerator->QueryInterface(__uuidof(IEnumVARIANT), (void**)&pEnumVariant);
+    pEnumerator->Release();
+
+    if (FAILED(hr)) {
+        std::wcerr << L"Không thể truy vấn IEnumVARIANT: " << hr << std::endl;
+        pFwRules->Release();
+        pNetFwPolicy2->Release();
+        CoUninitialize();
+        return 1;
+    }
+
+    VARIANT var;
+    VariantInit(&var);
+    ULONG cFetched = 0;
+
+    while (pEnumVariant->Next(1, &var, &cFetched) == S_OK && cFetched > 0) {
+        IDispatch* pDisp = V_DISPATCH(&var);
+        INetFwRule* pFwRule = nullptr;
+
+        hr = pDisp->QueryInterface(__uuidof(INetFwRule), (void**)&pFwRule);
+        if (SUCCEEDED(hr)) {
+            BSTR bstrName = nullptr;
+            BSTR bstrDescription = nullptr;
+            VARIANT_BOOL enabled;
+            NET_FW_RULE_DIRECTION direction;
+            BSTR bstrAppName = nullptr;
+            BSTR bstrLocalPorts = nullptr;
+            BSTR bstrRemotePorts = nullptr;
+            LONG protocol = 0;
+
+            pFwRule->get_Name(&bstrName);
+            pFwRule->get_Description(&bstrDescription);
+            pFwRule->get_Enabled(&enabled);
+            pFwRule->get_Direction(&direction);
+            pFwRule->get_ApplicationName(&bstrAppName);
+            pFwRule->get_LocalPorts(&bstrLocalPorts);
+            pFwRule->get_RemotePorts(&bstrRemotePorts);
+            pFwRule->get_Protocol(&protocol);
+
+            // In ra bảng, cắt chuỗi nếu quá dài (nếu muốn)
+            auto truncate = [](const std::wstring& str, size_t max_len) {
+                if (str.length() <= max_len) return str;
+                return str.substr(0, max_len - 3) + L"...";
+                };
+
+            std::wcout << std::left
+                << std::setw(wRuleName) << truncate(BstrToWstring(bstrName), wRuleName - 1)
+                << std::setw(wDescription) << truncate(BstrToWstring(bstrDescription), wDescription - 1)
+                << std::setw(wEnabled) << (enabled ? L"Yes" : L"No")
+                << std::setw(wDirection) << (direction == NET_FW_RULE_DIR_IN ? L"In" : L"Out")
+                << std::setw(wApp) << truncate(BstrToWstring(bstrAppName), wApp - 1)
+                << std::setw(wLocalPort) << truncate(BstrToWstring(bstrLocalPorts), wLocalPort - 1)
+                << std::setw(wRemotePort) << truncate(BstrToWstring(bstrRemotePorts), wRemotePort - 1)
+                << std::setw(wProtocol) << ProtocolToString(protocol)
+                << std::endl;
+
+            SysFreeString(bstrName);
+            SysFreeString(bstrDescription);
+            SysFreeString(bstrAppName);
+            SysFreeString(bstrLocalPorts);
+            SysFreeString(bstrRemotePorts);
+
+            pFwRule->Release();
+        }
+        VariantClear(&var);
+    }
+
+    pEnumVariant->Release();
+    pFwRules->Release();
+    pNetFwPolicy2->Release();
+    CoUninitialize();
+
+    return 0;
+}
+
+```
+
 
 
